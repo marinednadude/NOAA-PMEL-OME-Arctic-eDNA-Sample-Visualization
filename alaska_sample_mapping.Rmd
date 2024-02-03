@@ -1,0 +1,179 @@
+---
+title: "Alaska 2020-2023 NOAA OME PMEL Sample Map"
+output: html_document
+date: "2023-04-18"
+---
+```{r setup, include=FALSE} 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+```{r, echo=FALSE, hide=TRUE, warnings=FALSE,message=FALSE}
+library(tidyverse)
+library(here)
+library(sf)
+library(devtools)
+#devtools::install_github("katiejolly/nationalparkcolors")
+library(nationalparkcolors)
+library(knitr)
+library("rnaturalearth")
+library("rnaturalearthdata")
+library("readxl")
+library(parzer)
+
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+here()
+```
+
+```{r,echo=FALSE, hide=TRUE, warnings=FALSE,message = FALSE}
+sample_data <- read_excel(here("data","Alaska_Arctic_eDNASampleLocations.xlsx"))
+ome_data <- read_excel(here("data","20240202_OME_Sample_Spreadsheet.xlsx"))
+
+sample_data <- sample_data %>% 
+  rename(., Sample_ID="Sample NAME",
+         Cruise ="Cruise/Expedition Name",
+         Site="Site Name",
+         Depth_m="Depth (m)") %>% 
+  mutate(., Lat_deg=parse_lat(Latitude),
+         Lon_deg=parse_lon(Longitude)) %>% 
+  mutate(`Depth_m`=as.numeric(`Depth_m`))
+
+ome_data <- ome_data %>% 
+  rename(., Sample_ID="FINAL Sample NAME") %>% 
+  dplyr::select(Sample_ID,Date_utc=`Collection Date (UTC)`,Date_local=`Collection Date (local)`)
+
+
+attr(ome_data$Date_utc, "tzone") <- "UTC"
+attr(ome_data$Date_local, "tzone") <- "US/Alaska"
+
+ome_data %>% 
+  mutate(., Date = if_else(is.na(Date_utc), Date_local, Date_utc)) %>% 
+  dplyr::select(Sample_ID,Date)-> dates_clean
+
+sample_data %>% 
+  left_join(dates_clean) %>% 
+  mutate(., Year = as.numeric(format(Date, format="%Y"))) %>% 
+  mutate(., Date_easy = format(Date, format="%m-%d-%Y")) %>% 
+  mutate(., Month = as.numeric(str_sub(Date_easy,1L,2L)),
+         Season = case_when(Month<4~"Winter",
+                            Month <7~"Spring",
+                            Month <9~"Summer",
+                            Month < 12~"Fall")) %>% 
+  mutate(., Year = case_when(Sample_ID == "E26.1B.DY2012"~ 2020,
+       Sample_ID == "E1953.SKQ23-12S"~ 2023, 
+      Sample_ID == "E1954.SKQ23-12S"~ 2023,
+      Sample_ID == "E1955.SKQ23-12S"~ 2023,
+      TRUE ~Year)) %>% 
+  mutate(., Season = case_when(Sample_ID == "E26.1B.DY2012"~ "Fall",
+       Sample_ID == "E1953.SKQ23-12S"~ "Fall", 
+      Sample_ID == "E1954.SKQ23-12S"~ "Fall",
+      Sample_ID == "E1955.SKQ23-12S"~ "Fall",
+      TRUE ~Season))-> alaska_samples
+
+
+```
+# General Statistics
+```{r, warnings=FALSE,echo=FALSE, hide=TRUE, warnings=FALSE,message = FALSE}
+#make some colors
+
+
+pal <- park_palette("Denali", 5)
+pal2 <- park_palette("Yellowstone", 5)
+
+pal3 <- park_palette("Arches", 5)
+pal4 <- park_palette("Hawaii", 5)
+```
+
+
+
+### Unique Samples, Cruises, and Sites:
+```{r,echo=FALSE}
+
+alaska_samples %>% 
+dplyr::summarise(n_distinct(`Sample_ID`), n_distinct(Cruise), n_distinct(`Site`))
+
+```
+
+## Depth Distribution of Samples:
+
+```{r,echo=FALSE,warning=FALSE}
+my_binwidth <- 1
+
+alaska_samples %>%  
+  group_by(`Depth_m`) %>% 
+  ggplot(., aes(x=`Depth_m`))+
+  geom_histogram(binwidth = my_binwidth, colour= "black", fill = pal[1]) +
+  geom_density(aes(y = ..density.. * (nrow(sample_data) * my_binwidth)), fill=pal[1], alpha = .4) +theme_bw() + scale_x_sqrt(breaks=c(0,10,50,100,200,400,600)) +xlab("Depth (m)") + ylab("Count")
+```
+  
+Vast majority of Alaska samples are taken within the top 100m.
+
+# Cruise Map
+
+```{r,echo=FALSE,warning=FALSE, fig.height= 8, fig.width= 12}
+
+min_lat <- min(alaska_samples$Lat_deg)
+max_lat <- max(alaska_samples$Lat_deg)
+
+min_lon <- min(alaska_samples$Lon_deg)
+max_lon <- max(alaska_samples$Lon_deg)
+
+alaska_samples$Year <- as.character(alaska_samples$Year)
+
+
+ggplot(data = world) +
+    geom_sf() +
+    geom_point(data = alaska_samples, aes(x = Lon_deg, y = Lat_deg, colour=Year)) +
+    coord_sf(xlim = c(min_lon-2, max_lon+2), ylim = c(min_lat-2, max_lat+2), expand = FALSE) +theme_bw() +xlab("Longitude") +ylab("Latitude") +scale_color_manual(values=c(pal[1],pal2[1],pal2[5],pal3[1])) +
+  geom_text(data = alaska_samples, aes(x = Lon_deg, y = Lat_deg, label=Site),size = 0.5) +facet_grid(Season~Year)
+
+
+```
+
+Sikuliaq stations from 2021 were not labeled with site in the .xlsx file so the names are missing.
+
+Fall sites have far more repeated coverage. 2022 had lowest coverage.
+
+# Cruise Map Size Proportional to Years Surveyed
+```{r,echo=FALSE,warning=FALSE, fig.height= 8, fig.width= 12}
+
+alaska_samples %>% 
+  select(Lon_deg,Lat_deg, Year, Season) %>% 
+  mutate(., Lon_deg_r=round(Lon_deg,1),
+          Lat_deg_r=round(Lat_deg,1)) %>% 
+    select(Lon_deg_r,Lat_deg_r, Year, Season) %>% 
+  distinct() %>% 
+  group_by(Lon_deg_r,Lat_deg_r, Season) %>% 
+  count() -> group_by_site
+
+ggplot(data = world) +
+    geom_sf() +
+    geom_point(data = group_by_site, aes(x = Lon_deg_r, y = Lat_deg_r, size=n),alpha=0.6, colour=pal[1]) +
+    coord_sf(xlim = c(min_lon-2, max_lon+2), ylim = c(min_lat-2, max_lat+2), expand = FALSE) +theme_bw() +xlab("Longitude") +ylab("Latitude") +facet_grid(.~Season)
+
+
+```
+
+This is a count of the stations (had to round to nearest .1 degree lattitude and longitude since missing site/station names). Only 1 spring site was visited in 2022 and 2023 There are a handful of sites visited 3 or 4 times in the Fall since 2020. 
+
+## Heatmap of Sampling Intensity
+```{r,echo=FALSE,warning=FALSE, fig.height= 8, fig.width= 12}
+
+alaska_samples %>% 
+  select(Lon_deg,Lat_deg, Year, Season, Depth_m) %>% 
+  mutate(., Lon_deg_r=round(Lon_deg,1),
+          Lat_deg_r=round(Lat_deg,1)) %>% 
+    select(Lon_deg_r,Lat_deg_r, Year, Season, Depth_m) %>% 
+  distinct() %>% 
+  group_by(Lon_deg_r,Lat_deg_r, Year, Season) %>% 
+  count() %>% 
+  mutate(., `Distinct Depths Sampled`=n) %>% 
+  mutate(., Lat_Lon = str_c(Lat_deg_r, "_",Lon_deg_r)) %>% 
+  ggplot(., aes(x=Year, y= Lat_Lon, color=`Distinct Depths Sampled`, fill=`Distinct Depths Sampled`)) +geom_tile() +facet_grid(.~Season)
+
+
+```
+
+
+
+
