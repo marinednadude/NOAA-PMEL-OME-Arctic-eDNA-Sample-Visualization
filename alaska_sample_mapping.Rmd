@@ -28,6 +28,7 @@ here()
 ```{r,echo=FALSE, hide=TRUE, warnings=FALSE,message = FALSE}
 sample_data <- read_excel(here("data","Alaska_Arctic_eDNASampleLocations.xlsx"))
 ome_data <- read_excel(here("data","20240202_OME_Sample_Spreadsheet.xlsx"))
+sample_data$`Depth (m)` %>% unique()
 
 sample_data <- sample_data %>% 
   rename(., Sample_ID="Sample NAME",
@@ -37,6 +38,10 @@ sample_data <- sample_data %>%
   mutate(., Lat_deg=parse_lat(Latitude),
          Lon_deg=parse_lon(Longitude)) %>% 
   mutate(`Depth_m`=as.numeric(`Depth_m`))
+
+sample_data %>%  
+  filter(.,is.na(Depth_m)) 
+
 
 ome_data <- ome_data %>% 
   rename(., Sample_ID="FINAL Sample NAME") %>% 
@@ -173,6 +178,9 @@ alaska_samples %>%
 
 
 ```
+
+
+
 ### Distribution of Sites Revisited in Fall
 ```{r,echo=FALSE,warning=FALSE}
 
@@ -206,6 +214,29 @@ distinct_years_sampled %>%
    ggplot(., aes(x=`n`))+
   geom_histogram(binwidth = my_binwidth, colour= "black", fill = pal[1]) +
   geom_density(aes(y = ..density.. * (nrow(sample_data) * my_binwidth*.03)), fill=pal[1], alpha = .4) +theme_bw()  + ylab("Count")
+```
+
+
+```{r}
+alaska_samples %>% 
+  select(Lon_deg,Lat_deg, Year, Season) %>% 
+  mutate(., Lon_deg_r=round(Lon_deg,1),
+          Lat_deg_r=round(Lat_deg,1)) %>% 
+    select(Lon_deg_r,Lat_deg_r, Year, Season) %>% 
+  distinct() %>% 
+  group_by(Lon_deg_r,Lat_deg_r, Season) %>% 
+  count() %>% 
+  rename( counts_per_season_per_station ="n")-> unique_lat_lon
+
+
+alaska_samples %>% 
+  mutate(., Lon_deg_r=round(Lon_deg,1),
+          Lat_deg_r=round(Lat_deg,1)) %>% 
+  left_join(unique_lat_lon) -> counts_per_season_per_station
+
+write.csv(counts_per_season_per_station, file = here("data",
+                                                     "counts_per_season_per_station"))
+
 ```
 
 
