@@ -22,13 +22,11 @@ library(parzer)
 
 world <- ne_countries(scale = "medium", returnclass = "sf")
 
-here()
 ```
 
 ```{r,echo=FALSE, hide=TRUE, warnings=FALSE,message = FALSE}
 sample_data <- read_excel(here("data","Alaska_Arctic_eDNASampleLocations.xlsx"))
 ome_data <- read_excel(here("data","20240202_OME_Sample_Spreadsheet.xlsx"))
-sample_data$`Depth (m)` %>% unique()
 
 sample_data <- sample_data %>% 
   rename(., Sample_ID="Sample NAME",
@@ -38,9 +36,6 @@ sample_data <- sample_data %>%
   mutate(., Lat_deg=parse_lat(Latitude),
          Lon_deg=parse_lon(Longitude)) %>% 
   mutate(`Depth_m`=as.numeric(`Depth_m`))
-
-sample_data %>%  
-  filter(.,is.na(Depth_m)) 
 
 
 ome_data <- ome_data %>% 
@@ -130,9 +125,16 @@ ggplot(data = world) +
     geom_sf() +
     geom_point(data = alaska_samples, aes(x = Lon_deg, y = Lat_deg, colour=Year)) +
     coord_sf(xlim = c(min_lon-2, max_lon+2), ylim = c(min_lat-2, max_lat+2), expand = FALSE) +theme_bw() +xlab("Longitude") +ylab("Latitude") +scale_color_manual(values=c(pal[1],pal2[1],pal2[5],pal3[1])) +
-  geom_text(data = alaska_samples, aes(x = Lon_deg, y = Lat_deg, label=Site),size = 0.5) +facet_grid(Season~Year)
+  geom_text(data = alaska_samples, aes(x = Lon_deg, y = Lat_deg, label=Site),size = 0.5) +facet_grid(Season~Year)-> EcoFOCI_plot
 
 
+EcoFOCI_plot
+ggsave(plot= EcoFOCI_plot, 
+       filename = here("Figures","EcoFOCI_plot.png"),
+       width=12,
+       height = 8,
+       dpi = 300,
+      units = c("in"))
 ```
 
 
