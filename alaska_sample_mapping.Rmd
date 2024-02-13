@@ -135,6 +135,7 @@ ggplot(data = world) +
 
 ```
 
+
 Sikuliaq stations from 2021 were not labeled with site in the .xlsx file so the names are missing.
 
 Fall sites have far more repeated coverage. 2022 had lowest coverage.
@@ -160,6 +161,35 @@ ggplot(data = world) +
 ```
 
 This is a count of the stations (had to round to nearest .1 degree lattitude and longitude since missing site/station names). Only 1 spring site was visited in 2022 and 2023 There are a handful of sites visited 3 or 4 times in the Fall since 2020. 
+
+
+## Arctic Figure
+```{r}
+
+
+min_lat <- min(alaska_samples$Lat_deg)
+max_lat <- max(alaska_samples$Lat_deg)
+
+min_lon <- min(alaska_samples$Lon_deg)
+max_lon <- max(alaska_samples$Lon_deg)
+
+t2.rect1 <- data.frame (xmin=min_lon, xmax=max_lon+0.5, ymin=66, ymax=73)
+
+ggplot(data = world) +
+    geom_sf() +
+      geom_point(data = group_by_site, aes(x = Lon_deg_r, y = Lat_deg_r, size=n),alpha=0.4, colour=pal[1]) +
+    coord_sf(xlim = c(min_lon-2, max_lon+2), ylim = c(min_lat-2, max_lat+2), expand = FALSE) +theme_bw() +xlab("Longitude") +ylab("Latitude") +scale_color_manual(values=c(pal[1])) +
+    geom_rect(data=t2.rect1, aes(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax),  colour=pal4[3], alpha=0, inherit.aes = FALSE, size=1.5) + guides(size=guide_legend(title="Years Sampled")) -> arctic_plot
+
+
+arctic_plot
+ggsave(plot= arctic_plot, 
+       filename = here("Figures","arctic_plot.png"),
+       width=12,
+       height = 8,
+       dpi = 300,
+      units = c("in"))
+```
 
 ## Heatmap of Sampling Intensity
 ```{r,echo=FALSE,warning=FALSE, fig.height= 8, fig.width= 12}
@@ -235,9 +265,11 @@ alaska_samples %>%
   left_join(unique_lat_lon) -> counts_per_season_per_station
 
 write.csv(counts_per_season_per_station, file = here("data",
-                                                     "counts_per_season_per_station"))
+                                                     "counts_per_season_per_station.csv"))
 
 ```
+
+
 
 
 
